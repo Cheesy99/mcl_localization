@@ -39,7 +39,7 @@ public:
    */
   MCLNode() : Node("mcl_node") {
 
-    this->declare_parameter("particle_count", 500);
+    this->declare_parameter("particle_count", 2000);
     particle_count_ = this->get_parameter("particle_count").as_int();
 
     odom_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
@@ -74,8 +74,8 @@ private:
   rclcpp::Time last_time_;
   bool first_map_received_ = false;
 
-  double noise_v_ = 0.1;
-  double noise_w_ = 0.05;
+  double noise_v_ = 0.02;
+  double noise_w_ = 0.01;
 
   std::mt19937 rng_{std::random_device{}()};
 
@@ -90,7 +90,7 @@ private:
 
   std::vector<Landmark> map_landmarks_;
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr map_sub_;
-  double measurement_noise_std_ = 3.0;
+  double measurement_noise_std_ = 0.316;
 
   /**
    * @brief Task A1: Particle Initialization.
@@ -150,36 +150,41 @@ private:
    * (w) velocity.
    */
   void motion_callback(const nav_msgs::msg::Odometry::SharedPtr msg) {
-
     rclcpp::Time current_time = msg->header.stamp;
-
+    
     if (last_time_.nanoseconds() == 0) {
-      last_time_ = current_time;
-      return;
+        last_time_ = current_time;
+        return;
     }
-
+    
     double dt = (current_time - last_time_).seconds();
     last_time_ = current_time;
-
-    if (dt < 0.001)
-      return;
-
-    double v = msg->twist.twist.linear.x;
+    
+    if (dt < 0.001) return;
+    
+    // Get velocities in MAP frame from odometry
+    double vx = msg->twist.twist.linear.x;
+    double vy = msg->twist.twist.linear.y;
     double w = msg->twist.twist.angular.z;
-
+    
     std::normal_distribution<double> dist_v(0.0, noise_v_);
     std::normal_distribution<double> dist_w(0.0, noise_w_);
-
+    
     for (auto &p : particles_) {
-      double v_noisy = v + dist_v(rng_);
-      double w_noisy = w + dist_w(rng_);
-
-      p.x += v_noisy * dt * std::cos(p.theta);
-      p.y += v_noisy * dt * std::sin(p.theta);
-      p.theta += w_noisy * dt;
-
-      p.theta = normalize_angle(p.theta);
+        double vx_noisy = vx + dist_v(rng_);
+        double vy_noisy = vy + dist_v(rng_);
+        double w_noisy = w + dist_w(rng_);
+        
+        // Update position directly in map frame
+        p.x += vx_noisy * dt;
+        p.y += vy_noisy * dt;
+        p.theta += w_noisy * dt;
+        
+        p.theta = normalize_angle(p.theta);
     }
+    
+    publish_particles();
+}
 
     publish_particles();
   }
