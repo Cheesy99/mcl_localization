@@ -3,43 +3,23 @@
 #include "nav_msgs/msg/odometry.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/point_cloud2.hpp"
-#include "tf2_geometry_msgs/tf2_geometry_msgs.hpp" // Important for transforms
+#include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 #include "visualization_msgs/msg/marker_array.hpp"
 #include <cmath>
 #include <random>
 #include <vector>
 
-/**
- * @brief Represents a single hypothesis of the robot's state.
- * * Used for Task A1 (Initialization).
- */
 struct Particle {
-  /// @brief X coordinate in the map frame (meters)
   double x;
-  /// @brief Y coordinate in the map frame (meters)
   double y;
-  /// @brief Orientation in the map frame (radians)
   double theta;
-  /// @brief Probability weight of this particle (0.0 to 1.0)
   double weight;
 };
 
-/**
- * @brief Monte Carlo Localization (MCL) Node.
- * * This node implements a Particle Filter to estimate the robot's pose.
- * It handles initialization, motion updates (prediction), measurement updates
- * (correction), resampling, and pose estimation.
- */
 class MCLNode : public rclcpp::Node {
 public:
-  /**
-   * @brief Constructor for the MCL Node.
-   * * Initializes ROS 2 parameters, subscribers, publishers, and the initial
-   * particle set.
-   */
   MCLNode() : Node("mcl_node") {
-
-    this->declare_parameter("particle_count", 2000);
+    this->declare_parameter("particle_count", 1000);
     particle_count_ = this->get_parameter("particle_count").as_int();
 
     odom_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
@@ -79,9 +59,6 @@ private:
 
   std::mt19937 rng_{std::random_device{}()};
 
-  /**
-   * @brief Internal struct to store Map Landmarks.
-   */
   struct Landmark {
     int id;
     double x;
@@ -92,20 +69,15 @@ private:
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr map_sub_;
   double measurement_noise_std_ = 0.316;
 
-  /**
-   * @brief Task A1: Particle Initialization.
-   * * Uniformly distributes particles across the defined map bounds
-   * (-10m to 10m) and assigns them equal initial weights.
-   */
   void initialize_particles() {
     RCLCPP_INFO(this->get_logger(), "Initializing %d particles...",
                 particle_count_);
     particles_.clear();
 
-    double min_x = -5.0;
-    double max_x = 5.0;
-    double min_y = -5.0;
-    double max_y = 5.0;
+    double min_x = -10.0;
+    double max_x = 10.0;
+    double min_y = -10.0;
+    double max_y = 10.0;
 
     std::uniform_real_distribution<double> dist_x(min_x, max_x);
     std::uniform_real_distribution<double> dist_y(min_y, max_y);
@@ -128,12 +100,6 @@ private:
     publish_particles();
   }
 
-  /**
-   * @brief Helper function to normalize angles.
-   * * Ensures angles stay within [-PI, PI] to avoid wrapping errors.
-   * @param angle The angle in radians.
-   * @return Normalized angle in radians.
-   */
   double normalize_angle(double angle) {
     while (angle > M_PI)
       angle -= 2.0 * M_PI;
@@ -142,59 +108,45 @@ private:
     return angle;
   }
 
-  /**
-   * @brief Task A2: Motion Update (Prediction Step).
-   * * Applies the kinematic motion model to propagate particles based on
-   * odometry. Adds Gaussian noise to simulate the uncertainty of robot motion.
-   * * @param msg The noisy odometry message containing linear (v) and angular
-   * (w) velocity.
-   */
   void motion_callback(const nav_msgs::msg::Odometry::SharedPtr msg) {
     rclcpp::Time current_time = msg->header.stamp;
-    
+
     if (last_time_.nanoseconds() == 0) {
-        last_time_ = current_time;
-        return;
+      last_time_ = current_time;
+      return;
     }
-    
+
     double dt = (current_time - last_time_).seconds();
     last_time_ = current_time;
-    
-    if (dt < 0.001) return;
-    
-    // Get velocities in MAP frame from odometry
+
+    if (dt < 0.001)
+      return;
+
+    // FIXED: Get velocities in MAP frame (not robot frame)
     double vx = msg->twist.twist.linear.x;
     double vy = msg->twist.twist.linear.y;
     double w = msg->twist.twist.angular.z;
-    
-    std::normal_distribution<double> dist_v(0.0, noise_v_);
+
+    std::normal_distribution<double> dist_vx(0.0, noise_v_);
+    std::normal_distribution<double> dist_vy(0.0, noise_v_);
     std::normal_distribution<double> dist_w(0.0, noise_w_);
-    
+
     for (auto &p : particles_) {
-        double vx_noisy = vx + dist_v(rng_);
-        double vy_noisy = vy + dist_v(rng_);
-        double w_noisy = w + dist_w(rng_);
-        
-        // Update position directly in map frame
-        p.x += vx_noisy * dt;
-        p.y += vy_noisy * dt;
-        p.theta += w_noisy * dt;
-        
-        p.theta = normalize_angle(p.theta);
+      double vx_noisy = vx + dist_vx(rng_);
+      double vy_noisy = vy + dist_vy(rng_);
+      double w_noisy = w + dist_w(rng_);
+
+      // Update in map frame
+      p.x += vx_noisy * dt;
+      p.y += vy_noisy * dt;
+      p.theta += w_noisy * dt;
+
+      p.theta = normalize_angle(p.theta);
     }
-    
-    publish_particles();
-}
 
     publish_particles();
   }
 
-  /**
-   * @brief Callback to load the Ground Truth map.
-   * * Parses the PointCloud2 message and stores landmarks in memory.
-   * Run only once at startup.
-   * * @param msg PointCloud2 message containing landmark locations.
-   */
   void map_callback(const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
     if (!map_landmarks_.empty())
       return;
@@ -214,14 +166,6 @@ private:
                 map_landmarks_.size());
   }
 
-  /**
-   * @brief Task A3: Measurement Update (Correction Step).
-   * * Calculates the likelihood (weight) of each particle by comparing
-   * observed landmarks against the known map.
-   * * Triggers Resampling (Task A4) and Pose Estimation (Task A5).
-   * * @param msg PointCloud2 message containing observed landmarks relative to
-   * the robot.
-   */
   void sensor_callback(const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
     if (map_landmarks_.empty()) {
       RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
@@ -246,7 +190,6 @@ private:
       double particle_likelihood = 1.0;
 
       for (const auto &obs : observations) {
-
         double cos_theta = std::cos(p.theta);
         double sin_theta = std::sin(p.theta);
 
@@ -278,26 +221,17 @@ private:
         p.weight /= total_weight;
       }
     } else {
-
       RCLCPP_WARN(this->get_logger(), "All particles lost! Resetting weights.");
-    initialize_particles();
-    return;
+      initialize_particles();
+      return;
     }
 
     resample_particles();
-
     estimate_pose();
     publish_particles();
   }
 
-  /**
-   * @brief Task A4: Low-Variance Resampling.
-   * * Selects a new set of particles based on their weights.
-   * Particles with higher weights are more likely to be duplicated,
-   * while particles with lower weights are likely to be dropped.
-   */
   void resample_particles() {
-
     std::vector<Particle> new_particles;
     new_particles.reserve(particle_count_);
 
@@ -310,7 +244,6 @@ private:
     int i = 0;
 
     for (int m = 0; m < particle_count_; ++m) {
-
       double U_m = U + (m * r);
 
       while (U_m > c && i < particle_count_ - 1) {
@@ -319,21 +252,13 @@ private:
       }
 
       Particle p = particles_[i];
-
       p.weight = 1.0 / particle_count_;
-
       new_particles.push_back(p);
     }
 
     particles_ = new_particles;
   }
 
-  /**
-   * @brief Task A5: Pose Estimation.
-   * * Computes the weighted mean of the particle cloud to estimate the robot's
-   * pose. Uses vector math for orientation to avoid circular wrapping issues.
-   * Publishes the result to /mcl_pose.
-   */
   void estimate_pose() {
     double mean_x = 0.0;
     double mean_y = 0.0;
@@ -343,7 +268,6 @@ private:
     for (const auto &p : particles_) {
       mean_x += p.x * p.weight;
       mean_y += p.y * p.weight;
-
       mean_cos += std::cos(p.theta) * p.weight;
       mean_sin += std::sin(p.theta) * p.weight;
     }
@@ -365,10 +289,6 @@ private:
     pose_pub_->publish(pose_msg);
   }
 
-  /**
-   * @brief Task A6: Visualization.
-   * * Converts particles into a PoseArray message for visualization in RViz.
-   */
   void publish_particles() {
     auto msg = geometry_msgs::msg::PoseArray();
     msg.header.stamp = this->get_clock()->now();
