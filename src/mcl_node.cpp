@@ -35,7 +35,14 @@ public:
    */
   MCLNode() : Node("mcl_node") {
     this->declare_parameter("particle_count", 1000);
+    this->declare_parameter("noise_v", 0.05);
+    this->declare_parameter("noise_w", 0.02);
+    this->declare_parameter("sensor_std", 0.316);
+
     particle_count_ = this->get_parameter("particle_count").as_int();
+    noise_v_ = this->get_parameter("noise_v").as_double();
+    noise_w_ = this->get_parameter("noise_w").as_double();
+    measurement_noise_std_ = this->get_parameter("sensor_std").as_double();
 
     odom_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
         "/robot_noisy", 10,
