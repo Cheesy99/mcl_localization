@@ -4,6 +4,7 @@
 #include "nav_msgs/msg/odometry.hpp"
 #include "sensor_msgs/msg/point_cloud2.hpp"
 #include "visualization_msgs/msg/marker_array.hpp"
+#include "tf2_geometry_msgs/tf2_geometry_msgs.hpp" // Important for transforms
 #include <vector>
 #include <random>
 #include <cmath>
@@ -29,7 +30,6 @@ public:
             "/robot_noisy", 10, std::bind(&MCLNode::motion_callback, this, std::placeholders::_1));
 
         // Task A3: Listen to landmarks for Measurement Update
-        // Note: Your fake_robot publishes 'landmarks_observed', acting as the sensor data
         sensor_sub_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
             "/landmarks_observed", 10, std::bind(&MCLNode::sensor_callback, this, std::placeholders::_1));
 
@@ -117,8 +117,6 @@ private:
 
     // --- Task A5: Pose Estimation ---
     void estimate_pose() {
-        double mean_x = 0, mean_y = 0, mean_theta_x = 0, mean_theta_y = 0;
-
         // TODO: Calculate weighted mean
         
         // Publish the result
