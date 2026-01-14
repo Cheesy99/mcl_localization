@@ -14,10 +14,10 @@
  * * Contains the 2D pose (x, y, theta) and the associated probability weight.
  */
 struct Particle {
-  double x;      /**< X coordinate in map frame (meters) */
-  double y;      /**< Y coordinate in map frame (meters) */
-  double theta;  /**< Heading angle in radians [-PI, PI] */
-  double weight; /**< Importance weight [0.0, 1.0] */
+  double x;
+  double y;
+  double theta;
+  double weight; 
 };
 
 /**
@@ -64,7 +64,7 @@ public:
   }
 
 private:
-  // --- ROS 2 Member Variables ---
+
   std::vector<Particle> particles_;
   int particle_count_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
@@ -73,11 +73,11 @@ private:
   rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr particle_pub_;
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr map_sub_;
 
-  // --- Filter State Variables ---
+  
   rclcpp::Time last_time_;
   bool first_map_received_ = false;
-  double noise_v_ = 0.02; /**< Standard deviation of linear velocity noise */
-  double noise_w_ = 0.01; /**< Standard deviation of angular velocity noise */
+  double noise_v_ = 0.02;
+  double noise_w_ = 0.01;
   std::mt19937 rng_{std::random_device{}()};
 
   /** @brief Internal representation of a map landmark */
@@ -88,7 +88,7 @@ private:
   };
 
   std::vector<Landmark> map_landmarks_;
-  double measurement_noise_std_ = 0.316; /**< Std dev for Gaussian likelihood model */
+  double measurement_noise_std_ = 0.316;
 
   /**
    * @brief Task A1: Initialization.
@@ -191,7 +191,6 @@ private:
       return;
     }
 
-    // Parse sensor observations
     std::vector<Landmark> observations;
     int point_step = msg->point_step;
     for (size_t i = 0; i < msg->width; ++i) {
@@ -207,15 +206,14 @@ private:
       double particle_likelihood = 1.0;
 
       for (const auto &obs : observations) {
-        // Transform local observation to global map coordinates using particle pose
+        
         double cos_theta = std::cos(p.theta);
         double sin_theta = std::sin(p.theta);
         double predicted_x = p.x + (obs.x * cos_theta - obs.y * sin_theta);
         double predicted_y = p.y + (obs.x * sin_theta + obs.y * cos_theta);
 
-        double dist_sq = 10000.0; // Large penalty for no match
+        double dist_sq = 10000.0;
 
-        // Find matching landmark in the map
         for (const auto &lm : map_landmarks_) {
           if (lm.id == obs.id) {
             double dx = predicted_x - lm.x;
@@ -225,7 +223,6 @@ private:
           }
         }
 
-        // Gaussian likelihood model
         double exponent = -dist_sq / (2.0 * measurement_noise_std_ * measurement_noise_std_);
         particle_likelihood *= std::exp(exponent);
       }
@@ -233,7 +230,6 @@ private:
       total_weight += p.weight;
     }
 
-    // Normalize weights or reset if filter diverged
     if (total_weight > 0.0) {
       for (auto &p : particles_) p.weight /= total_weight;
     } else {
@@ -242,9 +238,9 @@ private:
       return;
     }
 
-    resample_particles(); /**< Task A4 */
-    estimate_pose();      /**< Task A5 */
-    publish_particles();  /**< Task A6 */
+    resample_particles();
+    estimate_pose();
+    publish_particles();
   }
 
   /**
