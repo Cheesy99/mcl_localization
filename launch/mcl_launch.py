@@ -8,7 +8,7 @@ def generate_launch_description():
         DeclareLaunchArgument('particle_count', default_value='1000'),
         DeclareLaunchArgument('noise_v', default_value='0.05'), 
         DeclareLaunchArgument('noise_w', default_value='0.02'), 
-        DeclareLaunchArgument('sensor_std', default_value='0.316')
+        DeclareLaunchArgument('sensor_std', default_value='0.316'),
         Node(
             package='mcl_localization',
             executable='mcl_node',
