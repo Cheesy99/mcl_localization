@@ -90,7 +90,7 @@ private:
 
   std::vector<Landmark> map_landmarks_;
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr map_sub_;
-  double measurement_noise_std_ = 2.5;
+  double measurement_noise_std_ = 3.0;
 
   /**
    * @brief Task A1: Particle Initialization.
@@ -102,10 +102,10 @@ private:
                 particle_count_);
     particles_.clear();
 
-    double min_x = -10.0;
-    double max_x = 10.0;
-    double min_y = -10.0;
-    double max_y = 10.0;
+    double min_x = -5.0;
+    double max_x = 5.0;
+    double min_y = -5.0;
+    double max_y = 5.0;
 
     std::uniform_real_distribution<double> dist_x(min_x, max_x);
     std::uniform_real_distribution<double> dist_y(min_y, max_y);
@@ -248,7 +248,7 @@ private:
         double predicted_x = p.x + (obs.x * cos_theta - obs.y * sin_theta);
         double predicted_y = p.y + (obs.x * sin_theta + obs.y * cos_theta);
 
-        double dist_sq = 100.0;
+        double dist_sq = 10000.0;
 
         for (const auto &lm : map_landmarks_) {
           if (lm.id == obs.id) {
