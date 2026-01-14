@@ -39,7 +39,7 @@ public:
    */
   MCLNode() : Node("mcl_node") {
 
-    this->declare_parameter("particle_count", 100);
+    this->declare_parameter("particle_count", 500);
     particle_count_ = this->get_parameter("particle_count").as_int();
 
     odom_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
@@ -90,7 +90,7 @@ private:
 
   std::vector<Landmark> map_landmarks_;
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr map_sub_;
-  double measurement_noise_std_ = 1.0;
+  double measurement_noise_std_ = 2.5;
 
   /**
    * @brief Task A1: Particle Initialization.
@@ -275,8 +275,8 @@ private:
     } else {
 
       RCLCPP_WARN(this->get_logger(), "All particles lost! Resetting weights.");
-      for (auto &p : particles_)
-        p.weight = 1.0 / particle_count_;
+    initialize_particles();
+    return;
     }
 
     resample_particles();
